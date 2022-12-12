@@ -1,8 +1,3 @@
-/**
- * Auto-generated code below aims at helping you parse
- * the standard input according to the problem statement.
- **/
-
 var inputs: string[] = readline().split(' ');
 const width: number = parseInt(inputs[0]);
 const height: number = parseInt(inputs[1]);
@@ -21,21 +16,16 @@ interface Tile {
     inRangeOfRecycler?: number;
 }
 
-interface TileToControl {
-    x: number;
-    y: number;
+interface ControlTile extends Tile {
     isAssigned: boolean;
 }
 
-//TODO: MOVE ALL MY UNITS
-//TODO: KEEP SPAWNING
-//FIXME: recycler
+let tiles: ControlTile[] = generateInitialTiles();
 
-let center:[width: number, height: number, scrapAmount: number] = [Math.round(width/2), Math.round(height/2), 69];
+const centerX = Math.floor(width / 2);
+const centerY = Math.floor(height / 2);
 
-
-let unownedTiles: TileToControl[] = [];
-let closestControlledToCenterTile: Tile | null = null;
+let centerTile: Tile = { x: centerX, y: centerY, scrapAmount: 6969 };
 
 // game loop
 while (true) {
@@ -44,9 +34,6 @@ while (true) {
     const oppMatter: number = parseInt(inputs[1]);
     for (let i = 0; i < height; i++) {
         for (let j = 0; j < width; j++) {
-            //reset assigned unownedTiles
-            unownedTiles = unownedTiles.map(tile => ({ ...tile, isAssigned: false }));
-               
             var inputs: string[] = readline().split(' ');
             const scrapAmount: number = parseInt(inputs[0]);
             const owner: number = parseInt(inputs[1]); // 1 = me, 0 = foe, -1 = neutral
@@ -56,91 +43,67 @@ while (true) {
             const canSpawn: number = parseInt(inputs[5]);
             const inRangeOfRecycler: number = parseInt(inputs[6]);
 
-            const centerOwner = (j === center[0] && i === center[1]) ? owner : -1;
+            updateTileState();
+            
+            handleMove();
 
-            if (owner !== 1 && scrapAmount > 0) {
-                unownedTiles.push({ x: j, y: i, isAssigned: false });        
+            handleSpawn();
+
+            // 1. Try to take all uncontrolled tiles
+            // 2. Try to take center tile
+            // 3. Move randomly by 1 tile if center is controlled
+            function handleMove() {
+                const uncontrolledTiles = tiles.filter(tile => tile.owner !== 1);
+                if (uncontrolledTiles.length === 0) {
+                    const closestUncontrolledTile = getClosestTile(j, i, uncontrolledTiles.filter(tile => tile.owner !== 1));
+                    if (closestUncontrolledTile !== null) {
+                        logString += `MOVE ${1} ${j} ${i} ${closestUncontrolledTile.x} ${closestUncontrolledTile.y};`;
+                        return;
+                    }
+                }
+
+                // if center is not controlled, move to center
+                if (centerTile.owner !== 1 && centerTile.scrapAmount! > 0) { 
+                    logString += `MOVE ${1} ${j} ${i} ${centerTile.x} ${centerTile.y};`;
+                    return;
+                }
+
+                // center is controlled, move randomly by 1 tile
+                const randomX = Math.floor(Math.random() * 3) - 1;
+                const randomY = Math.floor(Math.random() * 3) - 1;
+                logString += `MOVE ${1} ${j} ${i} ${j + randomX} ${i + randomY};`;
             }
-            //THE CENTER IS MINE
 
-            const getClosestTile = (x: number, y: number, tiles: Tile[]) => {
+            // 1. Try to spawn unit closest to center
+            // 2. Try to spawn unit
+            function handleSpawn() {
+                //find closest controlled tile to center
+                const controlledTiles = tiles.filter(tile => tile.owner === 1);
+                const closestControlledTile = getClosestTile(centerTile.x, centerTile.y, controlledTiles);
+                if (closestControlledTile !== null) {
+                    logString += `SPAWN ${1} ${closestControlledTile.x} ${closestControlledTile.y};`;
+                    return;
+                }
+
+                if (canSpawn === 1) {
+                    logString += `SPAWN ${1} ${j} ${i};`;
+                }
+            }
+
+            function handleBuild() {}
+
+            function updateTileState() {
+                const tileIndex = tiles.findIndex(tile => tile.x === j && tile.y === i);
+                tiles[tileIndex] = { ...tiles[tileIndex], scrapAmount, owner, units, recycler, canBuild, canSpawn, inRangeOfRecycler };
+            }
+
+            function getClosestTile(x: number, y: number, tiles: Tile[]): Tile | null {
+                if (tiles.length === 0) return null;
                 return tiles.reduce((prev, curr) => {
                     const prevDistance = Math.sqrt(Math.pow(prev.x - x, 2) + Math.pow(prev.y - y, 2));
                     const currDistance = Math.sqrt(Math.pow(curr.x - x, 2) + Math.pow(curr.y - y, 2));
                     return prevDistance < currDistance ? prev : curr;
                 });
-            } // I DID-§$ß IT .. now to use it....
-
-            //update center.scrapAmount
-            if (j === center[0] && i === center[1]) {
-                center[2] = scrapAmount;
-            }
-
-            //set closest controlled tile to center
-            if (owner === 1 && !closestControlledToCenterTile) {
-                closestControlledToCenterTile = { x: j, y: i, scrapAmount, owner, units, recycler, canBuild, canSpawn, inRangeOfRecycler };
-            } else if (owner === 1 && closestControlledToCenterTile) {
-                const prevDistance = Math.sqrt(Math.pow(closestControlledToCenterTile.x - center[0], 2) + Math.pow(closestControlledToCenterTile.y - center[1], 2));
-                const currDistance = Math.sqrt(Math.pow(j - center[0], 2) + Math.pow(i - center[1], 2));
-                if (prevDistance > currDistance) {
-                    closestControlledToCenterTile = { x: j, y: i, scrapAmount, owner, units, recycler, canBuild, canSpawn, inRangeOfRecycler };
-                }
-            }
-
-            //find first unassigned tile <<KEEP FOR NOW
-            const unassignedTile = unownedTiles.find(tile => tile.isAssigned === false);
-            // if (unassignedTile && units > 0) {
-            //     logString += `MOVE ${eHHHHxx1} ${j} ${i} ${unassignedTile.x} ${unassignedTile.y};`;
-            //     unassignedTile.isAssigned = true;
-            // }
-
-            //find first closest unassigned tile
-            if (unownedTiles.length > 0) { 
-                const closestUnassignedTile = unownedTiles.reduce((prev, curr) => {
-                    const prevDistance = Math.sqrt(Math.pow(prev.x - j, 2) + Math.pow(prev.y - i, 2));
-                    const currDistance = Math.sqrt(Math.pow(curr.x - j, 2) + Math.pow(curr.y - i, 2));
-                    return prevDistance < currDistance ? prev : curr;
-                });
-                if (closestUnassignedTile && units > 0) {
-                    console.error('closestUnassignedTile: setting move command')
-                    logString += `MOVE ${1} ${j} ${i} ${closestUnassignedTile.x} ${closestUnassignedTile.y};`;
-                    unownedTiles = unownedTiles.map(tile => {
-                        if (tile.x === closestUnassignedTile.x && tile.y === closestUnassignedTile.y) {
-                            return { ...tile, isAssigned: true }
-                        }
-                        return tile;
-                    });
-                    //remove tile from unownedTiles
-                    unownedTiles = unownedTiles.filter(tile => tile.x !== closestUnassignedTile.x && tile.y !== closestUnassignedTile.y);
-                }
-                
-            }
-                
-            // Develop your pieces, control the center!
-            if (logString.indexOf('MOVE') === -1 && units > 0) {
-                console.error('noMoveHasBeenSet');
-                if (centerOwner !== 1 && center[2] > 0) { // increase the minimum scrap amount to be safe and not suicide bots ??: maybe 
-                logString += `MOVE ${1} ${j} ${i} ${center[0]} ${center[1]};`;
-                //else move randomly by 1 tile
-                } else {
-                    const randomX = Math.floor(Math.random() * 3) - 1;
-                    const randomY = Math.floor(Math.random() * 3) - 1;
-                    logString += `MOVE ${1} ${j} ${i} ${j + randomX} ${i + randomY};`;
-                }
-            }
-
-
-
-            // SPAWNIN HANDLED HERE !!! <<<<<<<
-
-            // try to spawn closest to closestControlledToCenterTile
-            if (closestControlledToCenterTile && canSpawn) {
-                logString += `SPAWN 1 ${closestControlledToCenterTile.x} ${closestControlledToCenterTile.y};`;
-            }
-
-            // in case of bad code
-            if (logString.indexOf('SPAWN') === -1 && canSpawn) {
-                logString += `SPAWN 1 ${j} ${i};`;
             }
 
         }
@@ -150,4 +113,19 @@ while (true) {
     // To debug: console.error('Debug messages...');
 
     console.log(logString);
+}
+
+// for linter
+// function readline() {
+//     return '';
+// }
+
+function generateInitialTiles() {
+    const tiles: ControlTile[] = [];
+    for (let i = 0; i < height; i++) {
+        for (let j = 0; j < width; j++) {
+            tiles.push({ x: j, y: i, isAssigned: false });
+        }
+    }
+    return tiles;
 }
